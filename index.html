@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Spyglass Maths</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Literata:opsz,wght@7..72,400;7..72,700&family=IBM+Plex+Sans:wght@400;600&display=swap">
+<style>
+:root{--bg:#f4f6f8;--ink:#1b2330;--muted:#5b6676;--rule:#d9e0e8;--link:#2f6fa8;color-scheme:light}
+@media (prefers-color-scheme:dark){:root{--bg:#22262d;--ink:#e7ebf0;--muted:#9ba6b3;--rule:#3a414b;--link:#74aee3;color-scheme:dark}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.6 "Literata",Georgia,serif;padding:56px max(16px,env(safe-area-inset-left)) 64px}
+main{max-width:680px;margin:0 auto;display:grid;gap:28px}
+.eyebrow{font:600 12px "IBM Plex Sans",system-ui,sans-serif;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+h1{font-weight:700;font-size:40px;line-height:1.1;margin:0}
+p{margin:0}
+ul{list-style:none;margin:0;padding:0;border-top:1px solid var(--rule)}
+li{padding:16px 0;border-bottom:1px solid var(--rule);display:grid;gap:4px}
+a{color:var(--link);font-weight:700;text-underline-offset:2px}
+.meta{font:14px "IBM Plex Sans",system-ui,sans-serif;color:var(--muted)}
+</style>
+</head>
+<body>
+<main>
+  <div class="eyebrow">Spyglass Maths</div>
+  <h1>One idea, looked at closely</h1>
+  <p>Interactive explainers and extra materials for the Spyglass Maths video series.</p>
+  <ul>
+    <li>
+      <a href="finite-recursion.html">The filter no recursion can build</a>
+      <span class="meta">Telescoping in Signals &amp; Control · why a stable filter can still be impossible to implement</span>
+    </li>
+  </ul>
+  <p class="meta">Paper: <a href="https://doi.org/10.5281/zenodo.23641569">Telescoping in Signals and Control</a></p>
+</main>
+</body>
+</html>

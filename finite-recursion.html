@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>The Filter No Recursion Can Build</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,600;0,7..72,700;1,7..72,400&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one reading column of notes, with a full-width interactive scope panel in the middle. */
+:root {
+  --bg: #f4f6f8;
+  --panel: #ffffff;
+  --ink: #1b2330;
+  --muted: #5b6676;
+  --rule: #d9e0e8;
+  --grid: #e6ebf0;
+  --geo: #2f6fa8;      /* finite recursions (blue, as in the video) */
+  --ours: #c25d1c;     /* the Ep. 1 filter (orange, as in the video) */
+  --mark: #1b2330;
+  --code-bg: #eaeef3;
+  --f-display: "Literata", Georgia, "Times New Roman", serif;
+  --f-body: "Literata", Georgia, "Times New Roman", serif;
+  --f-ui: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #22262d; --panel: #2a2f37; --ink: #e7ebf0; --muted: #9ba6b3; --rule: #3a414b;
+    --grid: #343b45; --geo: #74aee3; --ours: #eb8a4c; --mark: #f2f4f7; --code-bg: #313741;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #22262d; --panel: #2a2f37; --ink: #e7ebf0; --muted: #9ba6b3; --rule: #3a414b;
+  --grid: #343b45; --geo: #74aee3; --ours: #eb8a4c; --mark: #f2f4f7; --code-bg: #313741;
+  color-scheme: dark;
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--f-body);
+  font-size: 17px;
+  line-height: 1.65;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.page { max-width: 760px; margin: 0 auto; padding-block: 48px 64px; display: grid; gap: 40px; }
+.col { max-width: 66ch; display: grid; gap: 14px; }
+
+.eyebrow { font-family: var(--f-ui); font-size: 12px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+h1 { font-family: var(--f-display); font-weight: 700; font-size: clamp(30px, 6vw, 44px); line-height: 1.12; margin: 0; text-wrap: balance; }
+h2 { font-family: var(--f-display); font-weight: 600; font-size: 23px; line-height: 1.25; margin: 0; text-wrap: balance; }
+p { margin: 0; }
+.lede { font-size: 19px; color: var(--ink); }
+.muted { color: var(--muted); }
+em.o { font-style: normal; color: var(--ours); font-weight: 600; }
+em.b { font-style: normal; color: var(--geo); font-weight: 600; }
+
+.eq {
+  font-family: var(--f-mono); font-size: 15px; background: var(--code-bg); border-radius: 6px;
+  padding: 12px 14px; overflow-x: auto; white-space: nowrap; line-height: 1.5;
+}
+.eq i { font-family: var(--f-body); font-style: italic; font-size: 16px; }
+var { font-family: var(--f-body); font-style: italic; }
+
+/* Scope panel */
+.scope { background: var(--panel); border: 1px solid var(--rule); border-radius: 10px; padding: 18px; display: grid; gap: 14px; min-width: 0; }
+.scope-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 8px 20px; }
+.scope-title { font-family: var(--f-ui); font-weight: 600; font-size: 15px; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-family: var(--f-ui); font-size: 13px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.swatch { width: 18px; height: 3px; border-radius: 2px; display: inline-block; }
+svg { display: block; width: 100%; height: auto; }
+svg text { font-family: var(--f-mono); font-size: 11px; fill: var(--muted); }
+svg .grid { stroke: var(--grid); stroke-width: 1; fill: none; }
+svg .axis { stroke: var(--muted); stroke-width: 1; fill: none; }
+svg .geo { stroke: var(--geo); stroke-width: 2.5; fill: none; }
+svg .ours { stroke: var(--ours); stroke-width: 3; fill: none; }
+svg .after { fill: var(--ours); opacity: .08; stroke: none; }
+svg .ring { stroke: var(--mark); stroke-width: 2; fill: none; }
+svg .ringlabel { fill: var(--ink); font-weight: 500; font-size: 12px; }
+
+.controls { display: grid; gap: 10px; font-family: var(--f-ui); font-size: 14px; }
+.slider-row { display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: center; }
+.slider-row label { color: var(--muted); }
+input[type=range] { width: 100%; accent-color: var(--geo); }
+.pval { font-family: var(--f-mono); font-variant-numeric: tabular-nums; min-width: 4.5ch; text-align: right; }
+.presets { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.presets .muted { font-size: 13px; }
+button.preset {
+  font: 500 13px var(--f-mono); color: var(--ink); background: transparent; border: 1px solid var(--rule);
+  border-radius: 999px; padding: 4px 10px; cursor: pointer;
+}
+button.preset:hover { border-color: var(--geo); }
+button.preset[aria-pressed="true"] { border-color: var(--geo); color: var(--geo); }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--geo); outline-offset: 2px; }
+.readout { font-family: var(--f-ui); font-size: 15px; line-height: 1.5; }
+.readout b { font-family: var(--f-mono); font-variant-numeric: tabular-nums; color: var(--ours); }
+
+hr { border: 0; border-top: 1px solid var(--rule); margin: 0; }
+.steps { display: grid; gap: 10px; margin: 0; padding-left: 1.3em; }
+.foot { font-family: var(--f-ui); font-size: 14px; color: var(--muted); display: grid; gap: 6px; }
+a { color: var(--geo); text-underline-offset: 2px; }
+
+@media (max-width: 480px) {
+  body { font-size: 16px; }
+  .page { padding-block: 28px 48px; gap: 32px; }
+  .slider-row { grid-template-columns: 1fr auto; }
+  .slider-row label { grid-column: 1 / -1; }
+}
+</style>
+
+<style>*,*::before,*::after{box-sizing:border-box}body{margin:0}img{max-width:100%}</style>
+</head>
+<body>
+<main class="page">
+  <header class="col">
+    <div class="eyebrow">Spyglass Maths · notes on the video</div>
+    <h1>The filter no recursion can build</h1>
+    <p class="lede">The video ends with a claim: the filter made from Episode 1's numbers is perfectly stable, yet no finite recursion can implement it. This page explains what that means and why it is true.</p>
+  </header>
+
+  <section class="col">
+    <h2>What a finite recursion is</h2>
+    <p>Most digital filters are computed by a recursion: each new output is a fixed combination of a few recent outputs and inputs.</p>
+    <div class="eq"><i>y</i>[<i>n</i>] = <i>a</i><sub>1</sub><i>y</i>[<i>n</i>−1] + … + <i>a<sub>k</sub></i><i>y</i>[<i>n</i>−<i>k</i>] + <i>b</i><sub>0</sub><i>x</i>[<i>n</i>] + … + <i>b<sub>m</sub></i><i>x</i>[<i>n</i>−<i>m</i>]</div>
+    <p>"Finite" means the filter only remembers a fixed number of values, <var>k</var> past outputs and <var>m</var> past inputs. That is what makes it cheap: a few multiplications per sample, forever. The simplest example is a one-pole smoother, <span class="eq" style="display:inline;padding:2px 6px"><i>y</i>[<i>n</i>] = <i>p</i>·<i>y</i>[<i>n</i>−1] + <i>x</i>[<i>n</i>]</span>.</p>
+  </section>
+
+  <section class="col">
+    <h2>Its fingerprint: geometric decay</h2>
+    <p>Feed a filter a single click (1 at time 0, then zeros) and record the output. That is its <em>impulse response</em>, <var>h</var>[<var>n</var>]. For the one-pole smoother it is <var>h</var>[<var>n</var>] = <var>p</var><sup><var>n</var></sup>: it shrinks by the same factor every step.</p>
+    <p>A recursion with more terms has more poles, and its response is a sum of such terms (possibly times polynomials in <var>n</var>). If the filter is stable, every pole satisfies |<var>p</var>| &lt; 1, so the response is squeezed under a geometric curve: |<var>h</var>[<var>n</var>]| ≤ <var>C</var>·<var>ρ</var><sup><var>n</var></sup> for some <var>ρ</var> &lt; 1.</p>
+    <p>On a logarithmic vertical axis, a geometric curve is a <em class="b">straight line</em>. So every stable finite recursion lives on or under a straight line.</p>
+  </section>
+
+  <section class="col">
+    <h2>The Episode 1 filter</h2>
+    <p>Now use Episode 1's terms as the impulse response:</p>
+    <div class="eq"><i>h</i>[<i>n</i>] = 1 / ((<i>n</i>+1)(<i>n</i>+2)) = 1/(<i>n</i>+1) − 1/(<i>n</i>+2) &nbsp;→&nbsp; ½, ⅙, 1/12, 1/20, …</div>
+    <p>By telescoping, these weights add up to exactly 1, so a bounded input always gives a bounded output: the filter is stable. But it fades like 1/<var>n</var>², a <em class="o">power law</em>, not a geometric one. On the log scale its curve bends and keeps flattening.</p>
+  </section>
+
+  <section class="scope" aria-labelledby="scope-title">
+    <div class="scope-head">
+      <div class="scope-title" id="scope-title">Impulse responses on a log scale</div>
+      <div class="legend">
+        <span><i class="swatch" style="background:var(--geo)"></i>finite recursion, 0.5·<var>p</var><sup><var>n</var></sup></span>
+        <span><i class="swatch" style="background:var(--ours)"></i>Episode 1 filter, 1/((<var>n</var>+1)(<var>n</var>+2))</span>
+      </div>
+    </div>
+    <svg id="chart" viewBox="0 0 720 340" role="img" aria-label="Log-scale plot of a geometric impulse response and the Episode 1 filter, with the point where the filter overtakes it"></svg>
+    <div class="controls">
+      <div class="slider-row">
+        <label for="pole">Pole <var>p</var> of the recursion</label>
+        <input id="pole" type="range" min="0.30" max="0.99" step="0.01" value="0.80">
+        <span class="pval" id="pval">0.80</span>
+      </div>
+      <div class="presets">
+        <span class="muted">From the video:</span>
+        <button class="preset" id="pre-50" data-p="0.50" aria-pressed="false">p = 0.5</button>
+        <button class="preset" id="pre-80" data-p="0.80" aria-pressed="true">p = 0.8</button>
+        <button class="preset" id="pre-90" data-p="0.90" aria-pressed="false">p = 0.9</button>
+      </div>
+      <p class="readout" id="readout"></p>
+    </div>
+  </section>
+
+  <section class="col">
+    <h2>Why it can never be matched</h2>
+    <p>Push the slider towards 1 and the crossing moves further out, but it always comes. The reason is one line: divide our filter by any geometric curve.</p>
+    <div class="eq"><i>h</i>[<i>n</i>] / <i>ρ</i><sup><i>n</i></sup> = (1/<i>ρ</i>)<sup><i>n</i></sup> / ((<i>n</i>+1)(<i>n</i>+2)) &nbsp;→&nbsp; ∞</div>
+    <p>The top grows exponentially, the bottom only like <var>n</var>², and an exponential always wins. So for every stable recursion there is a point after which the Episode 1 filter is larger than anything that recursion can produce. Adding more poles does not help: the response is still bounded by the slowest pole's straight line. No finite recursion, however large, can have this impulse response.</p>
+    <p class="muted">The same fact seen from the frequency side: a finite recursion always has a transfer function that is a ratio of two polynomials, while this filter's transfer function contains a logarithm, <var>H</var>(<var>z</var>) = (<var>w</var> + (1−<var>w</var>) log(1−<var>w</var>)) / <var>w</var>², with <var>w</var> = <var>z</var><sup>−1</sup>. A logarithm cannot be written as a ratio of polynomials.</p>
+  </section>
+
+  <section class="col">
+    <h2>What this means in practice</h2>
+    <p>A finite recursion forgets the past geometrically fast, because all it keeps is a fixed handful of numbers. The Episode 1 filter has a long memory: an input from long ago still matters, at 1/<var>n</var>² strength. Filters like this can only be <em>approximated</em> in a real system:</p>
+    <ul class="steps">
+      <li>cut the response off after <var>N</var> taps and compute it directly (an FIR filter), costing <var>N</var> multiplications per sample, or</li>
+      <li>fit a recursion that tracks it over the range you care about, accepting that it will fall away eventually.</li>
+    </ul>
+    <p>Either way, getting closer costs more. The exact filter is out of reach.</p>
+  </section>
+
+  <hr>
+  <footer class="foot">
+    <p>Full details and proofs: Section 6 ("Paper 1 as a filter") of <a href="https://doi.org/10.5281/zenodo.23641569">Telescoping in Signals and Control</a>, R. Colomina.</p>
+    <p>Spyglass Maths: one idea, looked at closely from several angles.</p>
+  </footer>
+</main>
+
+<script>
+(() => {
+  const svg = document.getElementById('chart');
+  const pole = document.getElementById('pole');
+  const pval = document.getElementById('pval');
+  const readout = document.getElementById('readout');
+  const presets = [...document.querySelectorAll('button.preset')];
+  const NS = 'http://www.w3.org/2000/svg';
+  const W = 720, H = 340, M = { l: 54, r: 18, t: 14, b: 38 };
+
+  const lg = Math.log10;
+  const ours = n => -lg((n + 1) * (n + 2));
+  const geo = (p, n) => lg(0.5) + n * lg(p);
+
+  // first n >= 1 where the Episode 1 filter exceeds 0.5 p^n (the log-ratio is convex, so it stays above after)
+  function crossing(p) {
+    for (let n = 1; n < 100000; n++) if (ours(n) > geo(p, n)) return n;
+    return Infinity;
+  }
+
+  function el(tag, attrs, parent) {
+    const e = document.createElementNS(NS, tag);
+    for (const k in attrs) e.setAttribute(k, attrs[k]);
+    (parent || svg).appendChild(e);
+    return e;
+  }
+
+  function draw(p) {
+    const N = crossing(p);
+    const rawMax = Math.max(60, Math.ceil(N * 1.35));
+    const step = rawMax <= 150 ? 20 : rawMax <= 400 ? 50 : rawMax <= 1200 ? 200 : 500;
+    const xMax = Math.ceil(rawMax / step) * step;
+    const yMin = Math.min(-4, Math.floor(ours(xMax)) - 1);
+    const yMax = 0;
+    const X = n => M.l + (n / xMax) * (W - M.l - M.r);
+    const Y = v => M.t + ((yMax - v) / (yMax - yMin)) * (H - M.t - M.b);
+
+    svg.replaceChildren();
+    // grid + labels
+    const yStep = (yMax - yMin) > 10 ? 2 : 1;
+    for (let v = 0; v >= yMin; v -= yStep) {
+      el('line', { x1: M.l, x2: W - M.r, y1: Y(v), y2: Y(v), class: 'grid' });
+      const t = el('text', { x: M.l - 8, y: Y(v) + 4, 'text-anchor': 'end' });
+      if (v === 0) t.textContent = '1';
+      else { t.textContent = '10'; const s = el('tspan', { dy: -5, 'font-size': 9 }, t); s.textContent = String(v); }
+    }
+    for (let n = 0; n <= xMax; n += step) {
+      el('line', { x1: X(n), x2: X(n), y1: M.t, y2: H - M.b, class: 'grid' });
+      const t = el('text', { x: X(n), y: H - M.b + 18, 'text-anchor': 'middle' });
+      t.textContent = String(n);
+    }
+    el('line', { x1: M.l, x2: M.l, y1: M.t, y2: H - M.b, class: 'axis' });
+    el('line', { x1: M.l, x2: W - M.r, y1: H - M.b, y2: H - M.b, class: 'axis' });
+    const xl = el('text', { x: W - M.r, y: H - 4, 'text-anchor': 'end' }); xl.textContent = 'n (time step)';
+
+    // shaded region after crossing
+    if (isFinite(N) && N < xMax) {
+      el('rect', { x: X(N), y: M.t, width: X(xMax) - X(N), height: H - M.t - M.b, class: 'after' });
+    }
+
+    // geometric line, clipped at the bottom of the plot
+    const nEnd = Math.min(xMax, (yMin - lg(0.5)) / lg(p));
+    el('path', { d: `M${X(0)},${Y(geo(p, 0))} L${X(nEnd)},${Y(geo(p, nEnd))}`, class: 'geo' });
+
+    // Episode 1 filter curve
+    let d = '';
+    const samples = 400;
+    for (let i = 0; i <= samples; i++) {
+      const n = (i / samples) * xMax;
+      d += (i ? 'L' : 'M') + X(n).toFixed(1) + ',' + Y(ours(n)).toFixed(1);
+    }
+    el('path', { d, class: 'ours' });
+
+    // crossing ring
+    if (isFinite(N) && N <= xMax) {
+      const cx = X(N), cy = Y(ours(N));
+      el('circle', { cx, cy, r: 9, class: 'ring' });
+      const lab = el('text', { x: cx + 13, y: cy - 10, class: 'ringlabel' });
+      lab.textContent = 'n = ' + N;
+    }
+
+    pval.textContent = p.toFixed(2);
+    readout.innerHTML = `With pole <var>p</var> = ${p.toFixed(2)}, the Episode 1 filter overtakes the recursion at <b>n = ${N}</b> and stays above it from then on (shaded).`;
+    presets.forEach(b => b.setAttribute('aria-pressed', String(Math.abs(parseFloat(b.dataset.p) - p) < 1e-9)));
+  }
+
+  pole.addEventListener('input', () => draw(parseFloat(pole.value)));
+  presets.forEach(b => b.addEventListener('click', () => { pole.value = b.dataset.p; draw(parseFloat(b.dataset.p)); }));
+  draw(parseFloat(pole.value));
+})();
+</script>
+</body>
+</html>
