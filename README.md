@@ -9,6 +9,7 @@ Live site: https://rcolomina.github.io/spyglass-maths/
 | Page | Goes with |
 |---|---|
 | [The filter no recursion can build](https://rcolomina.github.io/spyglass-maths/finite-recursion.html) | *Telescoping in Signals & Control*: why the stable filter built from 1/((n+1)(n+2)) can't be implemented by any finite recursion |
+| [The damped oscillator, hands on](https://rcolomina.github.io/spyglass-maths/damped-oscillator.html) | *The Damped Harmonic Oscillator* (differential equations, paper 1): sliders for the damping ratio, autopilot gains and flight-computer sample time |
 
 ## Papers
 
