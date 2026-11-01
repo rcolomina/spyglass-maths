@@ -1,0 +1,648 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Damped Oscillator Playground</title>
+<meta name="description" content="Interactive playground for the damped harmonic oscillator: damping ratio and poles, a pitch-attitude autopilot, and Euler versus exact discretisation on a flight computer.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,600;0,7..72,700;1,7..72,400&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one reading column of notes, with three full-width interactive panels. Same tokens as finite-recursion.html. */
+:root {
+  --bg: #f4f6f8;
+  --panel: #ffffff;
+  --ink: #1b2330;
+  --muted: #5b6676;
+  --rule: #d9e0e8;
+  --grid: #e6ebf0;
+  --resp: #2f6fa8;     /* the response (blue) */
+  --pole: #c25d1c;     /* poles, gains, highlights (orange) */
+  --ok: #2e8b57;       /* tolerance band, exact discretisation (green) */
+  --bad: #c2412d;      /* limits, Euler, instability (red) */
+  --code-bg: #eaeef3;
+  --f-display: "Literata", Georgia, "Times New Roman", serif;
+  --f-body: "Literata", Georgia, "Times New Roman", serif;
+  --f-ui: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #22262d; --panel: #2a2f37; --ink: #e7ebf0; --muted: #9ba6b3; --rule: #3a414b;
+    --grid: #343b45; --resp: #74aee3; --pole: #eb8a4c; --ok: #6cc08b; --bad: #ec7563; --code-bg: #313741;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #22262d; --panel: #2a2f37; --ink: #e7ebf0; --muted: #9ba6b3; --rule: #3a414b;
+  --grid: #343b45; --resp: #74aee3; --pole: #eb8a4c; --ok: #6cc08b; --bad: #ec7563; --code-bg: #313741;
+  color-scheme: dark;
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--f-body);
+  font-size: 17px;
+  line-height: 1.65;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.page { max-width: 860px; margin: 0 auto; padding-block: 48px 64px; display: grid; gap: 40px; }
+.col { max-width: 66ch; display: grid; gap: 14px; }
+
+.eyebrow { font-family: var(--f-ui); font-size: 12px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+h1 { font-family: var(--f-display); font-weight: 700; font-size: clamp(30px, 6vw, 44px); line-height: 1.12; margin: 0; text-wrap: balance; }
+h2 { font-family: var(--f-display); font-weight: 600; font-size: 23px; line-height: 1.25; margin: 0; text-wrap: balance; }
+p { margin: 0; }
+.lede { font-size: 19px; }
+.muted { color: var(--muted); }
+var { font-family: var(--f-body); font-style: italic; }
+
+.eq {
+  font-family: var(--f-mono); font-size: 15px; background: var(--code-bg); border-radius: 6px;
+  padding: 12px 14px; overflow-x: auto; white-space: nowrap; line-height: 1.5;
+}
+.eq i { font-family: var(--f-body); font-style: italic; font-size: 16px; }
+
+/* Panels */
+.scope { background: var(--panel); border: 1px solid var(--rule); border-radius: 10px; padding: 18px; display: grid; gap: 14px; min-width: 0; }
+.scope-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 8px 20px; }
+.scope-title { font-family: var(--f-ui); font-weight: 600; font-size: 15px; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-family: var(--f-ui); font-size: 13px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.swatch { width: 18px; height: 3px; border-radius: 2px; display: inline-block; }
+.swatch.box { height: 10px; opacity: .35; }
+.plots { display: grid; gap: 14px; grid-template-columns: 1.55fr 1fr; align-items: start; }
+.plots.stack { grid-template-columns: 1fr; }
+.plot-cap { font-family: var(--f-ui); font-size: 12px; color: var(--muted); margin-bottom: 2px; }
+
+svg { display: block; width: 100%; height: auto; touch-action: none; }
+svg text { font-family: var(--f-mono); font-size: 11px; fill: var(--muted); }
+svg .grid { stroke: var(--grid); stroke-width: 1; fill: none; }
+svg .axis { stroke: var(--muted); stroke-width: 1; fill: none; }
+svg .target { stroke: var(--ink); stroke-width: 1; stroke-dasharray: 5 4; fill: none; opacity: .7; }
+svg .band { fill: var(--ok); opacity: .16; stroke: none; }
+svg .curve { stroke: var(--resp); stroke-width: 2.6; fill: none; stroke-linejoin: round; }
+svg .ghost { stroke: var(--muted); stroke-width: 1.4; stroke-dasharray: 4 4; fill: none; opacity: .8; }
+svg .locus { stroke: var(--muted); stroke-width: 1.2; fill: none; opacity: .55; }
+svg .unstable { fill: var(--bad); opacity: .08; stroke: none; }
+svg .pole { stroke: var(--pole); stroke-width: 3; stroke-linecap: round; }
+svg .elev { stroke: var(--pole); stroke-width: 2.2; fill: none; }
+svg .limit { stroke: var(--bad); stroke-width: 1.2; stroke-dasharray: 6 4; fill: none; }
+svg .sat { fill: var(--bad); opacity: .07; stroke: none; }
+svg .exact { stroke: var(--muted); stroke-width: 1.6; fill: none; }
+svg .euler { stroke: var(--bad); stroke-width: 1.3; fill: none; }
+svg .euler-pt { fill: var(--bad); }
+svg .zoh-pt { fill: var(--ok); }
+svg .zoh-path { stroke: var(--ok); stroke-width: 1.2; fill: none; opacity: .5; }
+svg .eul-path { stroke: var(--bad); stroke-width: 1.2; fill: none; opacity: .4; }
+svg .ucircle { stroke: var(--ink); stroke-width: 1.3; fill: var(--ok); fill-opacity: .07; }
+svg .contour { stroke: var(--resp); stroke-width: 1.2; fill: none; opacity: .75; }
+svg .wcontour { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 3 4; fill: none; }
+svg .lab { fill: var(--ink); font-weight: 500; font-size: 11px; }
+svg .handle { fill: var(--pole); stroke: var(--panel); stroke-width: 2; cursor: grab; }
+svg .hit { fill: transparent; cursor: crosshair; }
+
+.controls { display: grid; gap: 10px; font-family: var(--f-ui); font-size: 14px; }
+.slider-row { display: grid; grid-template-columns: 11.5em 1fr 5ch; gap: 12px; align-items: center; }
+.slider-row label { color: var(--muted); }
+input[type=range] { width: 100%; accent-color: var(--pole); }
+.pval { font-family: var(--f-mono); font-variant-numeric: tabular-nums; text-align: right; }
+.presets { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.presets .muted { font-size: 13px; }
+button.preset {
+  font: 500 13px var(--f-mono); color: var(--ink); background: transparent; border: 1px solid var(--rule);
+  border-radius: 999px; padding: 4px 10px; cursor: pointer;
+}
+button.preset:hover { border-color: var(--pole); }
+button.preset[aria-pressed="true"] { border-color: var(--pole); color: var(--pole); }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--pole); outline-offset: 2px; }
+.check { display: inline-flex; gap: 8px; align-items: center; color: var(--ink); cursor: pointer; }
+.check input { accent-color: var(--bad); width: 16px; height: 16px; }
+
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; }
+.stat { border: 1px solid var(--rule); border-radius: 8px; padding: 8px 10px; display: grid; gap: 2px; min-width: 0; }
+.stat .k { font-family: var(--f-ui); font-size: 12px; color: var(--muted); }
+.stat .v { font-family: var(--f-mono); font-size: 15px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.v.good { color: var(--ok); } .v.warn { color: var(--bad); } .v.hi { color: var(--pole); }
+.readout { font-family: var(--f-ui); font-size: 15px; line-height: 1.5; }
+
+hr { border: 0; border-top: 1px solid var(--rule); margin: 0; }
+.foot { font-family: var(--f-ui); font-size: 14px; color: var(--muted); display: grid; gap: 6px; }
+a { color: var(--resp); text-underline-offset: 2px; }
+
+@media (max-width: 640px) {
+  .plots { grid-template-columns: 1fr; }
+}
+@media (max-width: 480px) {
+  body { font-size: 16px; }
+  .page { padding-block: 28px 48px; gap: 32px; }
+  .scope { padding: 14px; }
+  .slider-row { grid-template-columns: 1fr auto; }
+  .slider-row label { grid-column: 1 / -1; }
+}
+</style>
+<style>*,*::before,*::after{box-sizing:border-box}body{margin:0}img{max-width:100%}</style>
+</head>
+<body>
+<main class="page">
+  <header class="col">
+    <div class="eyebrow">Spyglass Maths · playground</div>
+    <h1>The damped oscillator, hands on</h1>
+    <p class="lede">One equation, three places it lives: a classroom, an aircraft and a flight computer. Each panel below lets you change the parameters and watch the solution respond.</p>
+    <div class="eq"><i>ẍ</i> + 2<i>ζω<sub>n</sub> ẋ</i> + <i>ω<sub>n</sub></i><sup>2</sup> <i>x</i> = <i>ω<sub>n</sub></i><sup>2</sup> <i>u</i>, &nbsp;&nbsp;<i>x</i>(0) = <i>ẋ</i>(0) = 0, &nbsp;&nbsp;<i>u</i> = 1</div>
+  </header>
+
+  <!-- ================================================================ 1 -->
+  <section class="col">
+    <h2>1 · One number shapes the response</h2>
+    <p>The damping ratio <var>ζ</var> decides everything about the shape of the step response; <var>ω<sub>n</sub></var> only stretches time. Both are read off the two roots of <var>λ</var><sup>2</sup> + 2<var>ζω<sub>n</sub>λ</var> + <var>ω<sub>n</sub></var><sup>2</sup> = 0, the poles. Below <var>ζ</var> = 1 they sit on a circle of radius <var>ω<sub>n</sub></var> and the response rings; at <var>ζ</var> = 1 they collide; above it they split along the real axis and the response creeps.</p>
+  </section>
+
+  <section class="scope" aria-labelledby="p1-title">
+    <div class="scope-head">
+      <div class="scope-title" id="p1-title">Step response and poles</div>
+      <div class="legend">
+        <span><i class="swatch" style="background:var(--resp)"></i><var>x</var>(<var>t</var>)</span>
+        <span><i class="swatch" style="background:var(--muted)"></i><var>ζ</var> = 0.7 for reference</span>
+        <span><i class="swatch box" style="background:var(--ok)"></i>±2% band</span>
+      </div>
+    </div>
+    <div class="plots">
+      <div><div class="plot-cap">x against dimensionless time ω<sub>n</sub>t</div>
+        <svg id="p1-step" viewBox="0 0 480 300" role="img" aria-label="Step response for the chosen damping ratio"></svg></div>
+      <div><div class="plot-cap">poles in the s-plane, divided by ω<sub>n</sub></div>
+        <svg id="p1-poles" viewBox="0 0 300 300" role="img" aria-label="Pole positions for the chosen damping ratio"></svg></div>
+    </div>
+    <div class="controls">
+      <div class="slider-row">
+        <label for="zeta">Damping ratio <var>ζ</var></label>
+        <input id="zeta" type="range" min="0" max="2" step="0.01" value="0.70">
+        <span class="pval" id="zeta-v">0.70</span>
+      </div>
+      <div class="presets" id="p1-presets">
+        <span class="muted">Try:</span>
+        <button class="preset" data-z="0.10">ζ = 0.1</button>
+        <button class="preset" data-z="0.30">ζ = 0.3</button>
+        <button class="preset" data-z="0.70">ζ = 0.7</button>
+        <button class="preset" data-z="1.00">ζ = 1</button>
+        <button class="preset" data-z="2.00">ζ = 2</button>
+      </div>
+      <div class="stats" id="p1-stats"></div>
+    </div>
+  </section>
+
+  <!-- ================================================================ 2 -->
+  <section class="col">
+    <h2>2 · A pitch autopilot is the same equation</h2>
+    <p>Hold the nose of an aircraft at a commanded pitch angle <var>θ</var><sub>ref</sub>. The simplified pitch dynamics are <var>θ̈</var> = <var>M<sub>q</sub> θ̇</var> + <var>M<sub>δ</sub> δ</var>, and the autopilot moves the elevator with a PD law <var>δ</var> = <var>K<sub>p</sub></var>(<var>θ</var><sub>ref</sub> − <var>θ</var>) − <var>K<sub>d</sub> θ̇</var>. Substituting gives the oscillator again, with</p>
+    <div class="eq"><i>ω<sub>n</sub></i><sup>2</sup> = <i>K<sub>p</sub> M<sub>δ</sub></i>, &nbsp;&nbsp; 2<i>ζω<sub>n</sub></i> = <i>K<sub>d</sub> M<sub>δ</sub></i> − <i>M<sub>q</sub></i>, &nbsp;&nbsp; <i>M<sub>δ</sub></i> = 10 s<sup>−2</sup>, <i>M<sub>q</sub></i> = −1 s<sup>−1</sup></div>
+    <p>Choosing the gains is choosing <var>ζ</var> and <var>ω<sub>n</sub></var>. Drag the dot in the gain plane or use the sliders. Then pick the fast design: it settles in 0.75 s instead of 2 s, but asks for 32° of elevator at the start, more than a real surface can give. Tick the limit to clip the deflection at ±25° and compare.</p>
+  </section>
+
+  <section class="scope" aria-labelledby="p2-title">
+    <div class="scope-head">
+      <div class="scope-title" id="p2-title">Attitude hold: 5° pitch-up command</div>
+      <div class="legend">
+        <span><i class="swatch" style="background:var(--resp)"></i>pitch <var>θ</var></span>
+        <span><i class="swatch" style="background:var(--pole)"></i>elevator <var>δ</var></span>
+        <span><i class="swatch" style="background:var(--bad)"></i>±25° limit</span>
+      </div>
+    </div>
+    <div class="plots">
+      <div style="display:grid;gap:6px">
+        <div><div class="plot-cap">pitch angle [deg] against time [s]</div>
+          <svg id="p2-theta" viewBox="0 0 480 210" role="img" aria-label="Pitch angle response"></svg></div>
+        <div><div class="plot-cap">elevator deflection [deg]</div>
+          <svg id="p2-delta" viewBox="0 0 480 150" role="img" aria-label="Elevator deflection"></svg></div>
+      </div>
+      <div><div class="plot-cap">gain plane: blue curves are constant ζ, dashed are constant ω<sub>n</sub></div>
+        <svg id="p2-gains" viewBox="0 0 300 300" role="img" aria-label="Gain plane with damping-ratio contours; drag to choose gains"></svg></div>
+    </div>
+    <div class="controls">
+      <div class="slider-row">
+        <label for="kp">Proportional gain <var>K<sub>p</sub></var></label>
+        <input id="kp" type="range" min="0.05" max="8" step="0.05" value="0.90">
+        <span class="pval" id="kp-v">0.90</span>
+      </div>
+      <div class="slider-row">
+        <label for="kd">Derivative gain <var>K<sub>d</sub></var> [s]</label>
+        <input id="kd" type="range" min="0" max="2" step="0.01" value="0.32">
+        <span class="pval" id="kd-v">0.32</span>
+      </div>
+      <div class="presets" id="p2-presets">
+        <span class="muted">Designs:</span>
+        <button class="preset" data-kp="0.90" data-kd="0.32">paper: ζ 0.7, ω<sub>n</sub> 3</button>
+        <button class="preset" data-kp="6.40" data-kd="1.02">fast: ζ 0.7, ω<sub>n</sub> 8</button>
+        <button class="preset" data-kp="0.90" data-kd="0.00">no rate feedback</button>
+        <button class="preset" data-kp="0.40" data-kd="0.60">sluggish</button>
+      </div>
+      <label class="check"><input type="checkbox" id="sat"> Clip the elevator at ±25°</label>
+      <div class="stats" id="p2-stats"></div>
+    </div>
+  </section>
+
+  <!-- ================================================================ 3 -->
+  <section class="col">
+    <h2>3 · On a flight computer, the sample time matters</h2>
+    <p>A computer runs the loop every <var>h</var> seconds. Forward Euler replaces the derivative by a difference quotient, <b>x</b><sub><var>k</var>+1</sub> = <b>x</b><sub><var>k</var></sub> + <var>h</var>(<var>A</var><b>x</b><sub><var>k</var></sub> + <var>Bu</var>), and is stable only while every <var>hλ</var> stays inside the disk |1 + <var>hλ</var>| &lt; 1. For an underdamped loop that means</p>
+    <div class="eq"><i>h</i> &lt; <i>h</i><sub>max</sub> = 2<i>ζ</i> / <i>ω<sub>n</sub></i></div>
+    <p>The exact zero-order-hold update <b>x</b><sub><var>k</var>+1</sub> = <var>e<sup>Ah</sup></var><b>x</b><sub><var>k</var></sub> + <var>Γu</var> has eigenvalues <var>e<sup>hλ</sup></var>, always inside the unit circle, so it is stable for every <var>h</var>. This panel uses the gains you chose above (without the elevator limit). Slide <var>h</var> past <var>h</var><sub>max</sub> and watch Euler leave the circle.</p>
+  </section>
+
+  <section class="scope" aria-labelledby="p3-title">
+    <div class="scope-head">
+      <div class="scope-title" id="p3-title">Euler versus exact discretisation</div>
+      <div class="legend">
+        <span><i class="swatch" style="background:var(--muted)"></i>exact</span>
+        <span><i class="swatch" style="background:var(--bad)"></i>forward Euler</span>
+        <span><i class="swatch" style="background:var(--ok)"></i>exact ZOH samples</span>
+      </div>
+    </div>
+    <div class="plots">
+      <div><div class="plot-cap">pitch angle [deg] computed every h seconds</div>
+        <svg id="p3-time" viewBox="0 0 480 300" role="img" aria-label="Discrete-time responses for Euler and zero-order hold"></svg></div>
+      <div><div class="plot-cap">eigenvalues of the update matrix Φ (z-plane)</div>
+        <svg id="p3-z" viewBox="0 0 300 300" role="img" aria-label="Eigenvalues of the Euler and zero-order-hold update matrices with the unit circle"></svg></div>
+    </div>
+    <div class="controls">
+      <div class="slider-row">
+        <label for="h">Sample time <var>h</var> [s]</label>
+        <input id="h" type="range" min="0.01" max="0.70" step="0.01" value="0.15">
+        <span class="pval" id="h-v">0.15</span>
+      </div>
+      <div class="presets" id="p3-presets">
+        <span class="muted">From the paper:</span>
+        <button class="preset" data-h="0.15">h = 0.15</button>
+        <button class="preset" data-h="0.44">h = 0.44</button>
+        <button class="preset" data-h="0.52">h = 0.52</button>
+      </div>
+      <div class="stats" id="p3-stats"></div>
+      <p class="readout" id="p3-read"></p>
+    </div>
+  </section>
+
+  <hr>
+  <footer class="foot">
+    <p>Goes with <em>The Damped Harmonic Oscillator: from a second-order ODE to a pitch autopilot and a flight computer</em>, R. Colomina, Spyglass Maths, differential-equations season, paper 1.</p>
+    <!-- TODO: link the Zenodo "all versions" DOI here once the paper is published. -->
+    <p>The aircraft numbers are illustrative. Everything on this page is computed in your browser from the formulas in the paper.</p>
+    <p><a href="./">More Spyglass Maths explainers</a></p>
+  </footer>
+</main>
+
+<script>
+(() => {
+  const NS = 'http://www.w3.org/2000/svg';
+  const $ = id => document.getElementById(id);
+  let clipSeq = 0;
+
+  // ------------------------------------------------------------------ maths
+  // Unit-step response and its derivative for x'' + 2 z w x' + w^2 x = w^2, zero initial conditions.
+  function stepResp(t, z, w) {
+    if (t <= 0) return 0;
+    if (Math.abs(z - 1) < 1e-9) return 1 - Math.exp(-w * t) * (1 + w * t);
+    if (z < 1) {
+      const s = Math.sqrt(1 - z * z), wd = w * s;
+      return 1 - Math.exp(-z * w * t) / s * Math.sin(wd * t + Math.acos(z));
+    }
+    const s = Math.sqrt(z * z - 1), r1 = -w * (z - s), r2 = -w * (z + s);
+    return 1 + (r2 * Math.exp(r1 * t) - r1 * Math.exp(r2 * t)) / (r1 - r2);
+  }
+  // Poles divided by omega_n
+  function polesN(z) {
+    if (z < 1) { const s = Math.sqrt(1 - z * z); return [[-z, s], [-z, -s]]; }
+    const s = Math.sqrt(z * z - 1); return [[-(z - s), 0], [-(z + s), 0]];
+  }
+  // Slowest decay rate (divided by omega_n)
+  const sigma = z => z < 1 ? z : z - Math.sqrt(z * z - 1);
+  // Exact 2% settling time in units of 1/omega_n (Infinity if undamped)
+  function settleN(z) {
+    if (z <= 0) return Infinity;
+    const T = 12 / sigma(z) + 4, N = 40000;
+    let last = 0;
+    for (let i = 1; i <= N; i++) { const t = T * i / N; if (Math.abs(stepResp(t, z, 1) - 1) > 0.02) last = t; }
+    return last;
+  }
+
+  // 2x2 helpers
+  const mat = (a, b, c, d) => [a, b, c, d];
+  const mv = (M, v) => [M[0] * v[0] + M[1] * v[1], M[2] * v[0] + M[3] * v[1]];
+  // e^{Ah} for a 2x2 matrix via Cayley-Hamilton
+  function expm2(A, h) {
+    const s = (A[0] + A[3]) / 2, det = A[0] * A[3] - A[1] * A[2], disc = s * s - det;
+    let c, S;
+    if (disc < -1e-12) { const w = Math.sqrt(-disc); c = Math.cos(w * h); S = Math.sin(w * h) / w; }
+    else if (disc > 1e-12) { const w = Math.sqrt(disc); c = Math.cosh(w * h); S = Math.sinh(w * h) / w; }
+    else { c = 1; S = h; }
+    const e = Math.exp(s * h);
+    return mat(e * (c + S * (A[0] - s)), e * S * A[1], e * S * A[2], e * (c + S * (A[3] - s)));
+  }
+  // complex eigenvalues of [[0,1],[-w^2,-2 z w]]
+  function eigs(z, w) { return polesN(z).map(([re, im]) => [re * w, im * w]); }
+  const cabs = ([a, b]) => Math.hypot(a, b);
+
+  // ----------------------------------------------------------- plot helper
+  function plot(svg, o) {
+    const W = o.W, H = o.H, M = o.M || { l: 44, r: 12, t: 10, b: 40 };
+    const [x0, x1] = o.x, [y0, y1] = o.y;
+    const X = v => M.l + (v - x0) / (x1 - x0) * (W - M.l - M.r);
+    const Y = v => M.t + (y1 - v) / (y1 - y0) * (H - M.t - M.b);
+    svg.replaceChildren();
+    const el = (tag, attrs, parent) => {
+      const e = document.createElementNS(NS, tag);
+      for (const k in attrs) e.setAttribute(k, attrs[k]);
+      (parent || svg).appendChild(e);
+      return e;
+    };
+    const id = 'clip' + (++clipSeq);
+    const defs = el('defs', {});
+    el('rect', { x: M.l, y: M.t, width: W - M.l - M.r, height: H - M.t - M.b }, el('clipPath', { id }, defs));
+    for (const v of o.yt || []) {
+      el('line', { x1: M.l, x2: W - M.r, y1: Y(v), y2: Y(v), class: 'grid' });
+      el('text', { x: M.l - 6, y: Y(v) + 4, 'text-anchor': 'end' }).textContent = (o.yf || String)(v);
+    }
+    for (const v of o.xt || []) {
+      el('line', { x1: X(v), x2: X(v), y1: M.t, y2: H - M.b, class: 'grid' });
+      if (!o.noXLabels) el('text', { x: X(v), y: H - M.b + 16, 'text-anchor': 'middle' }).textContent = (o.xf || String)(v);
+    }
+    if (o.axes !== false) {
+      el('line', { x1: M.l, x2: M.l, y1: M.t, y2: H - M.b, class: 'axis' });
+      el('line', { x1: M.l, x2: W - M.r, y1: H - M.b, y2: H - M.b, class: 'axis' });
+    }
+    if (o.xlab) el('text', { x: W - M.r, y: H - 3, 'text-anchor': 'end' }).textContent = o.xlab;
+    if (o.ylab) el('text', { x: 11, y: M.t + (H - M.t - M.b) / 2, 'text-anchor': 'middle', transform: `rotate(-90 11 ${M.t + (H - M.t - M.b) / 2})` }).textContent = o.ylab;
+    const g = el('g', { 'clip-path': `url(#${id})` });
+    const path = (pts, cls) => {
+      let d = '';
+      pts.forEach(([a, b], i) => { d += (i ? 'L' : 'M') + X(a).toFixed(1) + ',' + Y(b).toFixed(1); });
+      return el('path', { d, class: cls }, g);
+    };
+    return { el, g, X, Y, path, W, H, M };
+  }
+  const range = (a, b, s) => { const r = []; for (let v = a; v <= b + 1e-9; v += s) r.push(+v.toFixed(6)); return r; };
+  const fmt = (v, d = 2) => isFinite(v) ? v.toFixed(d) : '∞';
+  function stats(box, items) {
+    box.innerHTML = items.map(([k, v, cls]) => `<div class="stat"><span class="k">${k}</span><span class="v ${cls || ''}">${v}</span></div>`).join('');
+  }
+  function bindPresets(container, match) {
+    const btns = [...container.querySelectorAll('button.preset')];
+    return () => btns.forEach(b => b.setAttribute('aria-pressed', String(match(b))));
+  }
+
+  // ================================================================ panel 1
+  const zIn = $('zeta');
+  const p1Pressed = bindPresets($('p1-presets'), b => Math.abs(+b.dataset.z - +zIn.value) < 1e-9);
+  const TN = 14;
+  const refCurve = range(0, TN, 0.02).map(t => [t, stepResp(t, 0.7, 1)]);
+
+  function drawP1() {
+    const z = +zIn.value;
+    $('zeta-v').textContent = z.toFixed(2);
+
+    // step response
+    const P = plot($('p1-step'), { W: 480, H: 300, x: [0, TN], y: [0, 2.05], xt: range(0, 14, 2), yt: [0, 0.5, 1, 1.5, 2],
+      yf: v => v.toFixed(1), xlab: 'ωₙt' });
+    P.el('rect', { x: P.X(0), y: P.Y(1.02), width: P.X(TN) - P.X(0), height: P.Y(0.98) - P.Y(1.02), class: 'band' }, P.g);
+    P.el('line', { x1: P.X(0), x2: P.X(TN), y1: P.Y(1), y2: P.Y(1), class: 'target' }, P.g);
+    if (Math.abs(z - 0.7) > 1e-9) P.path(refCurve, 'ghost');
+    P.path(range(0, TN, 0.02).map(t => [t, stepResp(t, z, 1)]), 'curve');
+    const ts = settleN(z);
+    if (isFinite(ts) && ts <= TN) {
+      P.el('line', { x1: P.X(ts), x2: P.X(ts), y1: P.Y(0), y2: P.Y(2.05), class: 'limit', style: 'stroke:var(--ok)' }, P.g);
+      P.el('text', { x: P.X(ts) + 4, y: P.Y(0.08), class: 'lab', style: 'fill:var(--ok)' }).textContent = 'tₛ';
+    }
+    if (z > 0 && z < 1) {
+      const tp = Math.PI / Math.sqrt(1 - z * z), xp = stepResp(tp, z, 1);
+      if (tp <= TN) {
+        P.el('circle', { cx: P.X(tp), cy: P.Y(xp), r: 4.5, fill: 'var(--pole)' }, P.g);
+      }
+    }
+
+    // poles
+    const Q = plot($('p1-poles'), { W: 300, H: 300, M: { l: 30, r: 10, t: 10, b: 38 }, x: [-4.2, 0.6], y: [-2.1, 2.1],
+      xt: [-4, -3, -2, -1, 0], yt: [-2, -1, 0, 1, 2], axes: false, xlab: 'Re' });
+    Q.el('rect', { x: Q.X(0), y: Q.Y(2.1), width: Q.X(0.6) - Q.X(0), height: Q.Y(-2.1) - Q.Y(2.1), class: 'unstable' }, Q.g);
+    Q.el('line', { x1: Q.X(-4.2), x2: Q.X(0.6), y1: Q.Y(0), y2: Q.Y(0), class: 'axis' }, Q.g);
+    Q.el('line', { x1: Q.X(0), x2: Q.X(0), y1: Q.Y(2.1), y2: Q.Y(-2.1), class: 'axis' }, Q.g);
+    // root locus as zeta goes 0 -> 2: half circle then real axis
+    Q.path(range(Math.PI / 2, 3 * Math.PI / 2, 0.02).map(a => [Math.cos(a), Math.sin(a)]), 'locus');
+    Q.path([[-0.27, 0], [-3.73, 0]], 'locus');
+    Q.el('text', { x: Q.X(0.34), y: Q.Y(1.2), 'text-anchor': 'middle', style: 'fill:var(--bad)', transform: `rotate(90 ${Q.X(0.34)} ${Q.Y(1.2)})` }).textContent = 'unstable';
+    const pl = polesN(z);
+    if (z > 0 && z < 1) {
+      Q.el('line', { x1: Q.X(0), y1: Q.Y(0), x2: Q.X(pl[0][0]), y2: Q.Y(pl[0][1]), class: 'locus', style: 'opacity:.9' }, Q.g);
+      Q.el('text', { x: Q.X(-0.32), y: Q.Y(0.22), class: 'lab' }).textContent = 'φ';
+    }
+    for (const [re, im] of pl) {
+      const cx = Q.X(re), cy = Q.Y(im), r = 7;
+      Q.el('line', { x1: cx - r, y1: cy - r, x2: cx + r, y2: cy + r, class: 'pole' }, Q.g);
+      Q.el('line', { x1: cx - r, y1: cy + r, x2: cx + r, y2: cy - r, class: 'pole' }, Q.g);
+    }
+
+    // readouts
+    const regime = z === 0 ? ['undamped', 'warn'] : z < 1 ? ['underdamped', ''] : z === 1 ? ['critically damped', 'good'] : ['overdamped', 'hi'];
+    const Mp = z < 1 ? Math.exp(-Math.PI * z / Math.sqrt(1 - z * z)) * 100 : 0;
+    const tp = z < 1 ? Math.PI / Math.sqrt(1 - z * z) : Infinity;
+    const pTxt = z < 1 ? `${(-z).toFixed(2)} ± ${Math.sqrt(1 - z * z).toFixed(2)}i` : `${pl[0][0].toFixed(2)}, ${pl[1][0].toFixed(2)}`;
+    stats($('p1-stats'), [
+      ['regime', regime[0], regime[1]],
+      ['poles / ωₙ', pTxt],
+      ['overshoot Mₚ', fmt(Mp, 1) + ' %', Mp < 5 ? 'good' : ''],
+      ['peak time ωₙtₚ', z < 1 ? fmt(tp) : 'none'],
+      ['settling ωₙtₛ (exact)', fmt(ts)],
+      ['estimate 4/ζ', z > 0 ? fmt(4 / z) : '∞'],
+    ]);
+    p1Pressed();
+  }
+  zIn.addEventListener('input', drawP1);
+  $('p1-presets').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { zIn.value = b.dataset.z; drawP1(); } });
+
+  // ================================================================ panel 2
+  const MD = 10, MQ = -1, REF = 5, T2 = 6, DT = 0.002, LIM = 25;
+  const kpIn = $('kp'), kdIn = $('kd'), satIn = $('sat');
+  const p2Pressed = bindPresets($('p2-presets'), b => Math.abs(+b.dataset.kp - +kpIn.value) < 1e-9 && Math.abs(+b.dataset.kd - +kdIn.value) < 1e-9);
+  const design = () => { const kp = +kpIn.value, kd = +kdIn.value, wn = Math.sqrt(kp * MD); return { kp, kd, wn, z: (kd * MD - MQ) / (2 * wn) }; };
+
+  // RK4 simulation of the closed loop, with an optional elevator limit
+  function simulate(kp, kd, clip) {
+    const N = Math.round(T2 / DT), th = new Float64Array(N + 1), dl = new Float64Array(N + 1);
+    const sat = v => clip ? Math.max(-LIM, Math.min(LIM, v)) : v;
+    const ctrl = (x, q) => sat(kp * (REF - x) - kd * q);
+    const f = (x, q) => [q, MQ * q + MD * ctrl(x, q)];
+    let x = 0, q = 0;
+    for (let i = 0; i <= N; i++) {
+      th[i] = x; dl[i] = ctrl(x, q);
+      const k1 = f(x, q), k2 = f(x + DT / 2 * k1[0], q + DT / 2 * k1[1]);
+      const k3 = f(x + DT / 2 * k2[0], q + DT / 2 * k2[1]), k4 = f(x + DT * k3[0], q + DT * k3[1]);
+      x += DT / 6 * (k1[0] + 2 * k2[0] + 2 * k3[0] + k4[0]);
+      q += DT / 6 * (k1[1] + 2 * k2[1] + 2 * k3[1] + k4[1]);
+    }
+    return { th, dl, N };
+  }
+
+  // gain plane geometry
+  const G = { W: 300, H: 300, M: { l: 44, r: 12, t: 10, b: 40 }, x: [0, 8], y: [0, 2] };
+  let gainPlot = null;
+
+  function drawP2() {
+    const d = design();
+    $('kp-v').textContent = d.kp.toFixed(2);
+    $('kd-v').textContent = d.kd.toFixed(2);
+    const sim = simulate(d.kp, d.kd, satIn.checked);
+    const pts = (arr, every = 5) => { const r = []; for (let i = 0; i <= sim.N; i += every) r.push([i * DT, arr[i]]); return r; };
+
+    // pitch
+    const A = plot($('p2-theta'), { W: 480, H: 210, M: { l: 40, r: 12, t: 8, b: 36 }, x: [0, T2], y: [-2, 10], xt: range(0, 6, 1), yt: [0, 2.5, 5, 7.5, 10], yf: v => String(v), xlab: 't [s]' });
+    A.el('rect', { x: A.X(0), y: A.Y(REF * 1.02), width: A.X(T2) - A.X(0), height: A.Y(REF * 0.98) - A.Y(REF * 1.02), class: 'band' }, A.g);
+    A.el('line', { x1: A.X(0), x2: A.X(T2), y1: A.Y(REF), y2: A.Y(REF), class: 'target' }, A.g);
+    A.path(pts(sim.th), 'curve');
+
+    // elevator
+    const B = plot($('p2-delta'), { W: 480, H: 150, M: { l: 40, r: 12, t: 8, b: 22 }, x: [0, T2], y: [-45, 45], xt: range(0, 6, 1), yt: [-25, 0, 25], noXLabels: true });
+    B.el('rect', { x: B.X(0), y: B.Y(45), width: B.X(T2) - B.X(0), height: B.Y(LIM) - B.Y(45), class: 'sat' }, B.g);
+    B.el('rect', { x: B.X(0), y: B.Y(-LIM), width: B.X(T2) - B.X(0), height: B.Y(-45) - B.Y(-LIM), class: 'sat' }, B.g);
+    B.el('line', { x1: B.X(0), x2: B.X(T2), y1: B.Y(LIM), y2: B.Y(LIM), class: 'limit' }, B.g);
+    B.el('line', { x1: B.X(0), x2: B.X(T2), y1: B.Y(-LIM), y2: B.Y(-LIM), class: 'limit' }, B.g);
+    B.path(pts(sim.dl, 2), 'elev');
+
+    // gain plane
+    const C = plot($('p2-gains'), { ...G, xt: [0, 2, 4, 6, 8], yt: [0, 0.5, 1, 1.5, 2], yf: v => v.toFixed(1), xlab: 'Kₚ', ylab: 'Kd [s]' });
+    for (const w of [2, 4, 6, 8]) {
+      const kp = w * w / MD;
+      if (kp <= 8) {
+        C.el('line', { x1: C.X(kp), x2: C.X(kp), y1: C.Y(0), y2: C.Y(2), class: 'wcontour' }, C.g);
+        C.el('text', { x: C.X(kp) - 3, y: C.Y(0.04), 'font-size': 10, 'text-anchor': 'start', transform: `rotate(-90 ${C.X(kp) - 3} ${C.Y(0.04)})` }).textContent = 'ωₙ = ' + w;
+      }
+    }
+    for (const zc of [0.3, 0.5, 0.7, 1, 1.5]) {
+      const line = range(0.01, 8, 0.04).map(kp => [kp, (2 * zc * Math.sqrt(kp * MD) + MQ) / MD]).filter(p => p[1] >= -0.05);
+      C.path(line, 'contour');
+      const end = line.filter(p => p[1] <= 1.95).pop();
+      if (end) C.el('text', { x: C.X(end[0]) - 2, y: C.Y(end[1]) - 5, 'text-anchor': 'end', class: 'lab', style: 'fill:var(--resp)', 'font-size': 10 }).textContent = 'ζ=' + zc;
+    }
+    C.el('rect', { x: C.M.l, y: C.M.t, width: G.W - C.M.l - C.M.r, height: G.H - C.M.t - C.M.b, class: 'hit' });
+    C.el('circle', { cx: C.X(d.kp), cy: C.Y(d.kd), r: 8, class: 'handle' });
+    gainPlot = C;
+
+    // readouts
+    let peak = 0, peakD = 0, last = -1;
+    for (let i = 0; i <= sim.N; i++) {
+      peak = Math.max(peak, sim.th[i]);
+      peakD = Math.max(peakD, Math.abs(sim.dl[i]));
+      if (Math.abs(sim.th[i] - REF) > 0.02 * REF) last = i;
+    }
+    const Mp = Math.max(0, (peak / REF - 1) * 100);
+    const ts = last === sim.N ? '> 6 s' : ((last + 1) * DT).toFixed(2) + ' s';
+    const rawPeak = Math.max(...simulate(d.kp, d.kd, false).dl.map(Math.abs));
+    stats($('p2-stats'), [
+      ['damping ratio ζ', d.z.toFixed(2), Math.abs(d.z - 0.7) < 0.03 ? 'good' : ''],
+      ['natural freq. ωₙ', d.wn.toFixed(2) + ' rad/s'],
+      ['overshoot', Mp.toFixed(1) + ' %', Mp < 5 ? 'good' : 'warn'],
+      ['2% settling time', ts],
+      ['peak elevator |δ|', peakD.toFixed(1) + '°', rawPeak > LIM ? 'warn' : 'good'],
+    ]);
+    p2Pressed();
+    drawP3();
+  }
+
+  // drag in the gain plane
+  const gsvg = $('p2-gains');
+  let dragging = false;
+  function pick(ev) {
+    if (!gainPlot) return;
+    const r = gsvg.getBoundingClientRect();
+    const sx = (ev.clientX - r.left) * G.W / r.width, sy = (ev.clientY - r.top) * G.H / r.height;
+    const kp = G.x[0] + (sx - G.M.l) / (G.W - G.M.l - G.M.r) * (G.x[1] - G.x[0]);
+    const kd = G.y[1] - (sy - G.M.t) / (G.H - G.M.t - G.M.b) * (G.y[1] - G.y[0]);
+    kpIn.value = Math.min(8, Math.max(0.05, Math.round(kp / 0.05) * 0.05)).toFixed(2);
+    kdIn.value = Math.min(2, Math.max(0, Math.round(kd / 0.01) * 0.01)).toFixed(2);
+    drawP2();
+  }
+  gsvg.addEventListener('pointerdown', ev => { dragging = true; gsvg.setPointerCapture(ev.pointerId); pick(ev); });
+  gsvg.addEventListener('pointermove', ev => { if (dragging) pick(ev); });
+  gsvg.addEventListener('pointerup', () => { dragging = false; });
+  gsvg.addEventListener('pointercancel', () => { dragging = false; });
+  [kpIn, kdIn, satIn].forEach(i => i.addEventListener('input', drawP2));
+  $('p2-presets').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { kpIn.value = b.dataset.kp; kdIn.value = b.dataset.kd; drawP2(); } });
+
+  // ================================================================ panel 3
+  const hIn = $('h');
+  const p3Pressed = bindPresets($('p3-presets'), b => Math.abs(+b.dataset.h - +hIn.value) < 1e-9);
+
+  function drawP3() {
+    const { z, wn } = design(), h = +hIn.value;
+    $('h-v').textContent = h.toFixed(2);
+    const A = mat(0, 1, -wn * wn, -2 * z * wn), Bv = [0, wn * wn];
+    const lam = eigs(z, wn);
+    // Euler stability limit: |1 + h lam| < 1  <=>  h < -2 Re(lam) / |lam|^2, for every eigenvalue
+    const hmax = Math.min(...lam.map(l => -2 * l[0] / (l[0] * l[0] + l[1] * l[1])));
+
+    // ZOH matrices
+    const Phi = expm2(A, h);
+    const PmI = [Phi[0] - 1, Phi[1], Phi[2], Phi[3] - 1];
+    const det = A[0] * A[3] - A[1] * A[2];
+    const Ainv = [A[3] / det, -A[1] / det, -A[2] / det, A[0] / det];
+    const Gam = mv(Ainv, mv(PmI, Bv));
+
+    const T = 6, n = Math.floor(T / h);
+    let xe = [0, 0], xz = [0, 0];
+    const eu = [[0, 0]], zo = [[0, 0]];
+    for (let k = 1; k <= n; k++) {
+      const f = mv(A, xe);
+      xe = [xe[0] + h * (f[0] + Bv[0] * 1), xe[1] + h * (f[1] + Bv[1] * 1)];
+      const p = mv(Phi, xz); xz = [p[0] + Gam[0], p[1] + Gam[1]];
+      eu.push([k * h, REF * xe[0]]); zo.push([k * h, REF * xz[0]]);
+    }
+
+    const P = plot($('p3-time'), { W: 480, H: 300, x: [0, T], y: [-7.5, 17.5], xt: range(0, 6, 1), yt: [-5, 0, 5, 10, 15], xlab: 't [s]' });
+    P.el('line', { x1: P.X(0), x2: P.X(T), y1: P.Y(REF), y2: P.Y(REF), class: 'target' }, P.g);
+    P.path(range(0, T, 0.01).map(t => [t, REF * stepResp(t, z, wn)]), 'exact');
+    P.path(eu.map(([t, v]) => [t, Math.max(-50, Math.min(50, v))]), 'euler');
+    const showPts = n <= 160;
+    for (const [t, v] of eu) if (showPts && Math.abs(v) < 40) P.el('circle', { cx: P.X(t), cy: P.Y(v), r: 2.6, class: 'euler-pt' }, P.g);
+    for (const [t, v] of zo) if (showPts) P.el('rect', { x: P.X(t) - 3, y: P.Y(v) - 3, width: 6, height: 6, class: 'zoh-pt' }, P.g);
+
+    // z-plane
+    const Z = plot($('p3-z'), { W: 300, H: 300, M: { l: 30, r: 10, t: 10, b: 38 }, x: [-1.7, 1.7], y: [-1.7, 1.7], xt: [-1, 0, 1], yt: [-1, 0, 1], axes: false, xlab: 'Re z' });
+    Z.el('line', { x1: Z.X(-1.7), x2: Z.X(1.7), y1: Z.Y(0), y2: Z.Y(0), class: 'axis' }, Z.g);
+    Z.el('line', { x1: Z.X(0), x2: Z.X(0), y1: Z.Y(1.7), y2: Z.Y(-1.7), class: 'axis' }, Z.g);
+    Z.el('ellipse', { cx: Z.X(0), cy: Z.Y(0), rx: Z.X(1) - Z.X(0), ry: Z.Y(0) - Z.Y(1), class: 'ucircle' }, Z.g);
+    // paths as h goes from 0 to 0.7
+    const hs = range(0, 0.7, 0.005);
+    for (const [re, im] of lam) {
+      Z.path(hs.map(s => [1 + s * re, s * im]), 'eul-path');
+      Z.path(hs.map(s => { const m = Math.exp(s * re); return [m * Math.cos(s * im), m * Math.sin(s * im)]; }), 'zoh-path');
+    }
+    let rhoE = 0, rhoZ = 0;
+    for (const [re, im] of lam) {
+      const e = [1 + h * re, h * im], m = Math.exp(h * re), zz = [m * Math.cos(h * im), m * Math.sin(h * im)];
+      rhoE = Math.max(rhoE, cabs(e)); rhoZ = Math.max(rhoZ, cabs(zz));
+      Z.el('circle', { cx: Z.X(e[0]), cy: Z.Y(e[1]), r: 6, class: 'euler-pt' }, Z.g);
+      Z.el('rect', { x: Z.X(zz[0]) - 5, y: Z.Y(zz[1]) - 5, width: 10, height: 10, class: 'zoh-pt' }, Z.g);
+    }
+
+    const stable = rhoE < 1;
+    stats($('p3-stats'), [
+      ['loop rate 1/h', (1 / h).toFixed(1) + ' Hz'],
+      ['Euler limit hₘₐₓ', hmax.toFixed(3) + ' s', 'hi'],
+      ['h / hₘₐₓ', (h / hmax).toFixed(2), stable ? 'good' : 'warn'],
+      ['ρ(Φ) Euler', rhoE.toFixed(3), stable ? 'good' : 'warn'],
+      ['ρ(Φ) exact ZOH', rhoZ.toFixed(3), 'good'],
+    ]);
+    $('p3-read').innerHTML = stable
+      ? `Euler is stable at this rate${h / hmax > 0.7 ? ', but it rings badly as <var>h</var> approaches <var>h</var><sub>max</sub>' : ''}. The ZOH samples sit exactly on the true response.`
+      : `Euler is <b style="color:var(--bad)">unstable</b>: its eigenvalues have left the unit circle, so the computed pitch grows without bound, although the aircraft itself is perfectly stable. The ZOH update is still exact.`;
+    p3Pressed();
+  }
+  hIn.addEventListener('input', drawP3);
+  $('p3-presets').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { hIn.value = b.dataset.h; drawP3(); } });
+
+  drawP1();
+  drawP2();
+})();
+</script>
+</body>
+</html>
